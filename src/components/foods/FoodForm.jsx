@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Input, Select } from '../ui/Input'
 import Button from '../ui/Button'
+import Modal from '../ui/Modal'
+import BuiltinFoodSearch from './BuiltinFoodSearch'
 import { NUTRIENT_FIELDS, FOOD_CATEGORIES, NUTRIENT_DEFAULTS, CATEGORICAL_FIELDS } from '../../lib/nutrients'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, BookOpen } from 'lucide-react'
 
 const NUTRIENT_GROUPS = [
   {
@@ -45,6 +47,16 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
   const [expandedGroups, setExpandedGroups] = useState(['Grundnährwerte'])
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [showBuiltin, setShowBuiltin] = useState(false)
+
+  function applyBuiltinFood(food) {
+    if (food.name) setName(food.name)
+    if (food.category) setCategory(food.category)
+    if (food.nutrients && Object.keys(food.nutrients).length > 0) {
+      setNutrients(prev => ({ ...prev, ...food.nutrients }))
+    }
+    setShowBuiltin(false)
+  }
 
   function toggleGroup(label) {
     setExpandedGroups(prev =>
@@ -98,6 +110,15 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <button
+        type="button"
+        onClick={() => setShowBuiltin(true)}
+        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors"
+      >
+        <BookOpen size={16} />
+        Aus Lebensmitteldatenbank übernehmen
+      </button>
+
       <Input
         label="Name des Lebensmittels *"
         value={name}
@@ -223,6 +244,10 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
           {submitting ? 'Speichern...' : (initial ? 'Änderungen speichern' : 'Lebensmittel anlegen')}
         </Button>
       </div>
+
+      <Modal isOpen={showBuiltin} onClose={() => setShowBuiltin(false)} title="Lebensmittel aus Datenbank" size="md">
+        <BuiltinFoodSearch onSelect={applyBuiltinFood} />
+      </Modal>
     </form>
   )
 }
