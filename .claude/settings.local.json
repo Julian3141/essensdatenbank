@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(mkdir -p 'C:/Users/younx/Dropbox/0 Organisatorisches \\(Privat\\)/Essensdatenbank/src/components/foods')",
+      "Bash(mkdir -p 'C:/Users/younx/Dropbox/0 Organisatorisches \\(Privat\\)/Essensdatenbank/src/components/recipes')",
+      "Bash(mkdir -p 'C:/Users/younx/Dropbox/0 Organisatorisches \\(Privat\\)/Essensdatenbank/src/components/planner')",
+      "Bash(mkdir -p 'C:/Users/younx/Dropbox/0 Organisatorisches \\(Privat\\)/Essensdatenbank/src/components/shopping')",
+      "Bash(mkdir -p 'C:/Users/younx/Dropbox/0 Organisatorisches \\(Privat\\)/Essensdatenbank/src/components/ui')",
+      "Bash(npm install *)",
+      "Bash(VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_ANON_KEY=placeholder npm run build)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git remote *)"
+    ]
+  }
+}
