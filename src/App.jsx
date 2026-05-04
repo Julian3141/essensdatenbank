@@ -4,6 +4,7 @@ import FoodsPage from './pages/FoodsPage'
 import RecipesPage from './pages/RecipesPage'
 import PlannerPage from './pages/PlannerPage'
 import ShoppingPage from './pages/ShoppingPage'
+import PinLock, { isUnlocked } from './components/ui/PinLock'
 import { Apple, BookOpen, Calendar, ShoppingCart, AlertCircle, Download } from 'lucide-react'
 
 const TABS = [
@@ -20,6 +21,7 @@ const hasSupabaseConfig = Boolean(
 )
 
 export default function App() {
+  const [unlocked, setUnlocked] = useState(isUnlocked)
   const [activeTab, setActiveTab] = useState('foods')
   const [installPrompt, setInstallPrompt] = useState(null)
   const [installed, setInstalled] = useState(false)
@@ -45,6 +47,8 @@ export default function App() {
     planner: PlannerPage,
     shopping: ShoppingPage,
   }[activeTab]
+
+  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />
 
   return (
     <ToastProvider>
