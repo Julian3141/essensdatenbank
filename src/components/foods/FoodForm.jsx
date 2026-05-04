@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Input, Select } from '../ui/Input'
 import Button from '../ui/Button'
+import Modal from '../ui/Modal'
+import OpenFoodFactsSearch from './OpenFoodFactsSearch'
 import { NUTRIENT_FIELDS, FOOD_CATEGORIES, NUTRIENT_DEFAULTS, CATEGORICAL_FIELDS } from '../../lib/nutrients'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Database } from 'lucide-react'
 
 const NUTRIENT_GROUPS = [
   {
@@ -45,6 +47,16 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
   const [expandedGroups, setExpandedGroups] = useState(['Grundnährwerte'])
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [showOFF, setShowOFF] = useState(false)
+
+  function applyOFFProduct(product) {
+    if (product.name) setName(product.name)
+    if (product.category) setCategory(product.category)
+    if (product.nutrients && Object.keys(product.nutrients).length > 0) {
+      setNutrients(prev => ({ ...prev, ...product.nutrients }))
+    }
+    setShowOFF(false)
+  }
 
   function toggleGroup(label) {
     setExpandedGroups(prev =>
@@ -98,6 +110,15 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <button
+        type="button"
+        onClick={() => setShowOFF(true)}
+        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+      >
+        <Database size={16} />
+        Aus Open Food Facts importieren
+      </button>
+
       <Input
         label="Name des Lebensmittels *"
         value={name}
@@ -223,6 +244,10 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
           {submitting ? 'Speichern...' : (initial ? 'Änderungen speichern' : 'Lebensmittel anlegen')}
         </Button>
       </div>
+
+      <Modal isOpen={showOFF} onClose={() => setShowOFF(false)} title="Aus Open Food Facts importieren" size="md">
+        <OpenFoodFactsSearch onSelect={applyOFFProduct} />
+      </Modal>
     </form>
   )
 }
