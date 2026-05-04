@@ -1,14 +1,22 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRecipes } from '../hooks/useRecipes'
 import { useFoods } from '../hooks/useFoods'
 import { useToast } from '../components/ui/Toast'
+import { useActivePerson } from '../context/PersonContext'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import RecipeForm from '../components/recipes/RecipeForm'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
 import { calculateNutrients, sumNutrients } from '../lib/nutrients'
-import { Plus, Search, Edit2, Trash2, X, BookOpen } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, BookOpen, Star } from 'lucide-react'
+
+const NUTRIENT_PRESETS = [
+  { key: 'high_protein', label: 'High Protein',      check: n => (n.protein  || 0) >= 25 },
+  { key: 'low_carb',     label: 'Low Carb',           check: n => (n.carbs    || 0) <= 20 },
+  { key: 'low_cal',      label: 'Wenig Kalorien',     check: n => (n.calories || 0) <= 400 },
+  { key: 'high_fiber',   label: 'Ballaststoffreich',  check: n => (n.fiber    || 0) >= 5 },
+]
 
 function computeRecipeNutrients(recipe) {
   if (!recipe.recipe_ingredients?.length) return {}
@@ -19,9 +27,7 @@ function computeRecipeNutrients(recipe) {
   const total = sumNutrients(parts)
   const s = recipe.servings || 1
   const result = {}
-  for (const [k, v] of Object.entries(total)) {
-    result[k] = v / s
-  }
+  for (const [k, v] of Object.entries(total)) result[k] = v / s
   return result
 }
 
@@ -29,6 +35,7 @@ export default function RecipesPage() {
   const { recipes, loading, error, createRecipe, updateRecipe, deleteRecipe } = useRecipes()
   const { foods } = useFoods()
   const { addToast } = useToast()
+  const { activePerson } = useActivePerson()
 
   const [showCreate, setShowCreate] = useState(false)
   const [editRecipe, setEditRecipe] = useState(null)
@@ -36,9 +43,36 @@ export default function RecipesPage() {
   const [deleteId, setDeleteId] = useState(null)
   const [search, setSearch] = useState('')
   const [filterTag, setFilterTag] = useState('')
-  const [filterFoodIds, setFilterFoodIds] = useState([]) // Zutaten-Filter (mehrere)
+  const [filterFoodIds, setFilterFoodIds] = useState([])
   const [foodFilterSearch, setFoodFilterSearch] = useState('')
   const [showFoodFilterDropdown, setShowFoodFilterDropdown] = useState(false)
+  const [filterFavorites, setFilterFavorites] = useState(false)
+  const [filterNutrient, setFilterNutrient] = useState('')
+
+  const favKey = `favorites_${activePerson?.id || 'guest'}`
+  const [favorites, setFavorites] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(favKey)) || []) } catch { return new Set() }
+  })
+
+  useEffect(() => {
+    try { setFavorites(new Set(JSON.parse(localStorage.getItem(favKey)) || [])) } catch { setFavorites(new Set()) }
+  }, [favKey])
+
+  function toggleFavorite(recipeId, e) {
+    e.stopPropagation()
+    setFavorites(prev => {
+      const next = new Set(prev)
+      next.has(recipeId) ? next.delete(recipeId) : next.add(recipeId)
+      localStorage.setItem(favKey, JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  const recipeNutrients = useMemo(() => {
+    const map = {}
+    recipes.forEach(r => { map[r.id] = computeRecipeNutrients(r) })
+    return map
+  }, [recipes])
 
   const allTags = useMemo(() => {
     const tags = new Set()
@@ -64,14 +98,19 @@ export default function RecipesPage() {
     setFilterFoodIds(prev => prev.filter(x => x !== id))
   }
 
-  const filtered = useMemo(() => recipes.filter(r => {
-    const matchName = r.name.toLowerCase().includes(search.toLowerCase())
-    const matchTag = !filterTag || r.tags?.includes(filterTag)
-    const matchFoods = filterFoodIds.length === 0 || filterFoodIds.every(fid =>
-      r.recipe_ingredients?.some(i => i.food_id === fid)
-    )
-    return matchName && matchTag && matchFoods
-  }), [recipes, search, filterTag, filterFoodIds])
+  const filtered = useMemo(() => {
+    const preset = NUTRIENT_PRESETS.find(p => p.key === filterNutrient)
+    return recipes.filter(r => {
+      const matchName = r.name.toLowerCase().includes(search.toLowerCase())
+      const matchTag = !filterTag || r.tags?.includes(filterTag)
+      const matchFoods = filterFoodIds.length === 0 || filterFoodIds.every(fid =>
+        r.recipe_ingredients?.some(i => i.food_id === fid)
+      )
+      const matchFav = !filterFavorites || favorites.has(r.id)
+      const matchNutrient = !preset || preset.check(recipeNutrients[r.id] || {})
+      return matchName && matchTag && matchFoods && matchFav && matchNutrient
+    })
+  }, [recipes, search, filterTag, filterFoodIds, filterFavorites, favorites, filterNutrient, recipeNutrients])
 
   async function handleCreate(recipe, ingredients) {
     try {
@@ -108,13 +147,16 @@ export default function RecipesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Rezepte</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {filtered.length !== recipes.length ? `${filtered.length} von ${recipes.length} Rezepten` : `${recipes.length} Rezepte`}
+            {filtered.length !== recipes.length
+              ? `${filtered.length} von ${recipes.length} Rezepten`
+              : `${recipes.length} Rezepte`}
           </p>
         </div>
         <Button icon={Plus} onClick={() => setShowCreate(true)}>Neues Rezept</Button>
       </div>
 
       <div className="flex flex-col gap-2 mb-4">
+        {/* Zeile 1: Suche + Tag-Filter */}
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -137,7 +179,7 @@ export default function RecipesPage() {
           )}
         </div>
 
-        {/* Zutaten-Filter */}
+        {/* Zeile 2: Zutaten-Filter */}
         <div className="flex flex-wrap items-center gap-2">
           {filterFoodIds.map(fid => {
             const food = foods.find(f => f.id === fid)
@@ -187,6 +229,34 @@ export default function RecipesPage() {
             Zeige Rezepte die <strong>alle</strong> markierten Zutaten enthalten.
           </p>
         )}
+
+        {/* Zeile 3: Favoriten + Nährwert-Filter */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilterFavorites(p => !p)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              filterFavorites
+                ? 'bg-amber-50 border-amber-300 text-amber-700'
+                : 'bg-white border-gray-200 text-gray-500 hover:border-amber-300 hover:text-amber-600'
+            }`}
+          >
+            <Star size={13} className={filterFavorites ? 'fill-amber-500 text-amber-500' : ''} />
+            Favoriten
+          </button>
+          {NUTRIENT_PRESETS.map(preset => (
+            <button
+              key={preset.key}
+              onClick={() => setFilterNutrient(p => p === preset.key ? '' : preset.key)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                filterNutrient === preset.key
+                  ? 'bg-primary-50 border-primary-400 text-primary-700'
+                  : 'bg-white border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -197,14 +267,15 @@ export default function RecipesPage() {
         <div className="text-center py-12 text-gray-500">Lade Rezepte...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          {search || filterTag || filterFoodIds.length > 0
+          {search || filterTag || filterFoodIds.length > 0 || filterFavorites || filterNutrient
             ? 'Keine Rezepte mit diesen Filterkriterien gefunden.'
             : 'Noch keine Rezepte angelegt. Klick auf "Neues Rezept" um zu starten.'}
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {filtered.map(recipe => {
-            const nutrients = computeRecipeNutrients(recipe)
+            const nutrients = recipeNutrients[recipe.id] || {}
+            const isFav = favorites.has(recipe.id)
             return (
               <div key={recipe.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-primary-300 transition-colors">
                 <div className="p-4">
@@ -220,6 +291,17 @@ export default function RecipesPage() {
                       )}
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={e => toggleFavorite(recipe.id, e)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isFav
+                            ? 'text-amber-500 hover:bg-amber-50'
+                            : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+                        }`}
+                        title={isFav ? 'Favorit entfernen' : 'Als Favorit markieren'}
+                      >
+                        <Star size={15} className={isFav ? 'fill-amber-500' : ''} />
+                      </button>
                       <button
                         onClick={() => setViewRecipe(recipe)}
                         className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
@@ -265,19 +347,16 @@ export default function RecipesPage() {
         </div>
       )}
 
-      {/* Rezept anlegen */}
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Neues Rezept anlegen" size="xl">
         <RecipeForm foods={foods} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
       </Modal>
 
-      {/* Rezept bearbeiten */}
       <Modal isOpen={!!editRecipe} onClose={() => setEditRecipe(null)} title="Rezept bearbeiten" size="xl">
         {editRecipe && (
           <RecipeForm initial={editRecipe} foods={foods} onSubmit={handleUpdate} onCancel={() => setEditRecipe(null)} />
         )}
       </Modal>
 
-      {/* Rezept ansehen */}
       <Modal isOpen={!!viewRecipe} onClose={() => setViewRecipe(null)} title={viewRecipe?.name || ''} size="lg">
         {viewRecipe && <RecipeDetail recipe={viewRecipe} />}
       </Modal>
