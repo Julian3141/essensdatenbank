@@ -22,7 +22,7 @@ export function useMealPlan(weekStart, personId = null) {
           id, name, servings,
           recipe_ingredients (
             amount_grams,
-            foods (id, name, nutrients)
+            foods (id, name, category, nutrients)
           )
         )
       `)
@@ -50,7 +50,7 @@ export function useMealPlan(weekStart, personId = null) {
           id, name, servings,
           recipe_ingredients (
             amount_grams,
-            foods (id, name, nutrients)
+            foods (id, name, category, nutrients)
           )
         )
       `)
@@ -77,7 +77,7 @@ export function useMealPlan(weekStart, personId = null) {
           id, name, servings,
           recipe_ingredients (
             amount_grams,
-            foods (id, name, nutrients)
+            foods (id, name, category, nutrients)
           )
         )
       `)
