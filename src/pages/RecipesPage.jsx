@@ -11,12 +11,6 @@ import { NutrientGrid } from '../components/ui/NutrientBadge'
 import { calculateNutrients, sumNutrients } from '../lib/nutrients'
 import { Plus, Search, Edit2, Trash2, X, BookOpen, Star } from 'lucide-react'
 
-const NUTRIENT_PRESETS = [
-  { key: 'high_protein', label: 'High Protein',      check: n => (n.protein  || 0) >= 25 },
-  { key: 'low_carb',     label: 'Low Carb',           check: n => (n.carbs    || 0) <= 20 },
-  { key: 'low_cal',      label: 'Wenig Kalorien',     check: n => (n.calories || 0) <= 400 },
-  { key: 'high_fiber',   label: 'Ballaststoffreich',  check: n => (n.fiber    || 0) >= 5 },
-]
 
 function computeRecipeNutrients(recipe) {
   if (!recipe.recipe_ingredients?.length) return {}
@@ -47,7 +41,6 @@ export default function RecipesPage() {
   const [foodFilterSearch, setFoodFilterSearch] = useState('')
   const [showFoodFilterDropdown, setShowFoodFilterDropdown] = useState(false)
   const [filterFavorites, setFilterFavorites] = useState(false)
-  const [filterNutrient, setFilterNutrient] = useState('')
 
   const favKey = `favorites_${activePerson?.id || 'guest'}`
   const [favorites, setFavorites] = useState(() => {
@@ -98,19 +91,15 @@ export default function RecipesPage() {
     setFilterFoodIds(prev => prev.filter(x => x !== id))
   }
 
-  const filtered = useMemo(() => {
-    const preset = NUTRIENT_PRESETS.find(p => p.key === filterNutrient)
-    return recipes.filter(r => {
-      const matchName = r.name.toLowerCase().includes(search.toLowerCase())
-      const matchTag = !filterTag || r.tags?.includes(filterTag)
-      const matchFoods = filterFoodIds.length === 0 || filterFoodIds.every(fid =>
-        r.recipe_ingredients?.some(i => i.food_id === fid)
-      )
-      const matchFav = !filterFavorites || favorites.has(r.id)
-      const matchNutrient = !preset || preset.check(recipeNutrients[r.id] || {})
-      return matchName && matchTag && matchFoods && matchFav && matchNutrient
-    })
-  }, [recipes, search, filterTag, filterFoodIds, filterFavorites, favorites, filterNutrient, recipeNutrients])
+  const filtered = useMemo(() => recipes.filter(r => {
+    const matchName = r.name.toLowerCase().includes(search.toLowerCase())
+    const matchTag = !filterTag || r.tags?.includes(filterTag)
+    const matchFoods = filterFoodIds.length === 0 || filterFoodIds.every(fid =>
+      r.recipe_ingredients?.some(i => i.food_id === fid)
+    )
+    const matchFav = !filterFavorites || favorites.has(r.id)
+    return matchName && matchTag && matchFoods && matchFav
+  }), [recipes, search, filterTag, filterFoodIds, filterFavorites, favorites])
 
   async function handleCreate(recipe, ingredients) {
     try {
@@ -230,8 +219,8 @@ export default function RecipesPage() {
           </p>
         )}
 
-        {/* Zeile 3: Favoriten + Nährwert-Filter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Zeile 3: Favoriten-Filter */}
+        <div>
           <button
             onClick={() => setFilterFavorites(p => !p)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
@@ -243,19 +232,6 @@ export default function RecipesPage() {
             <Star size={13} className={filterFavorites ? 'fill-amber-500 text-amber-500' : ''} />
             Favoriten
           </button>
-          {NUTRIENT_PRESETS.map(preset => (
-            <button
-              key={preset.key}
-              onClick={() => setFilterNutrient(p => p === preset.key ? '' : preset.key)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                filterNutrient === preset.key
-                  ? 'bg-primary-50 border-primary-400 text-primary-700'
-                  : 'bg-white border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600'
-              }`}
-            >
-              {preset.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -267,7 +243,7 @@ export default function RecipesPage() {
         <div className="text-center py-12 text-gray-500">Lade Rezepte...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          {search || filterTag || filterFoodIds.length > 0 || filterFavorites || filterNutrient
+          {search || filterTag || filterFoodIds.length > 0 || filterFavorites
             ? 'Keine Rezepte mit diesen Filterkriterien gefunden.'
             : 'Noch keine Rezepte angelegt. Klick auf "Neues Rezept" um zu starten.'}
         </div>
