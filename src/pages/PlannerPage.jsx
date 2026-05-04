@@ -8,8 +8,9 @@ import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
+import CircleProgress from '../components/ui/CircleProgress'
 import { calculateNutrients, sumNutrients, MEAL_TYPES, PERSON_COLORS, NUTRIENT_FIELDS } from '../lib/nutrients'
-import { ChevronLeft, ChevronRight, Plus, X, Users, Edit2, Trash2, Search, Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Users, Edit2, Trash2, Search, Settings, Target } from 'lucide-react'
 
 function getWeekStart(date) {
   const d = new Date(date)
@@ -44,7 +45,7 @@ function computeEntryNutrients(entry) {
 export default function PlannerPage() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const { entries, loading, addEntry, removeEntry } = useMealPlan(weekStart)
-  const { persons, createPerson, updatePerson, deletePerson } = usePersons()
+  const { persons, createPerson, updatePerson, updateGoals, deletePerson } = usePersons()
   const { recipes } = useRecipes()
   const { addToast } = useToast()
 
@@ -52,6 +53,7 @@ export default function PlannerPage() {
   const [addModal, setAddModal] = useState(null)
   const [managePersons, setManagePersons] = useState(false)
   const [showNutrientSettings, setShowNutrientSettings] = useState(false)
+  const [showGoals, setShowGoals] = useState(false)
   const [recipeSearch, setRecipeSearch] = useState('')
   const [selectedServings, setSelectedServings] = useState(1)
   const { visibleNutrients, toggle: toggleNutrient, reset: resetNutrients } = useNutrientSettings()
@@ -239,22 +241,41 @@ export default function PlannerPage() {
                   <div className="text-xs text-gray-400 font-medium py-1 px-1">Tagesges.</div>
                   {weekDays.map((day, i) => {
                     const n = getDayNutrients(day)
+                    const goals = currentPerson?.nutrient_goals || {}
                     const hasData = n.calories && n.calories > 0
+                    const goalsWithData = visibleNutrients.filter(k => goals[k] > 0)
+                    const showCircles = goalsWithData.length > 0 && hasData
                     return (
-                      <div key={i} className={`rounded-lg p-1.5 text-center ${hasData ? 'bg-orange-50' : 'bg-gray-50'}`}>
-                        {hasData ? (
-                          <>
-                            {visibleNutrients.slice(0, 3).map(key => {
+                      <div key={i} className={`rounded-lg p-1 ${hasData ? 'bg-gray-50' : 'bg-gray-50'}`}>
+                        {showCircles ? (
+                          <div className="flex flex-wrap gap-0.5 justify-center">
+                            {goalsWithData.slice(0, 2).map(key => {
                               const field = NUTRIENT_FIELDS.find(f => f.key === key)
-                              if (!field || n[key] == null) return null
-                              const val = key === 'calories' ? `${Math.round(n[key])} kcal` : `${(n[key] || 0).toFixed(0)}${field.unit}`
+                              if (!field) return null
                               return (
-                                <div key={key} className="text-[10px] text-gray-600 truncate">{val}</div>
+                                <CircleProgress
+                                  key={key}
+                                  value={n[key] || 0}
+                                  goal={goals[key]}
+                                  label={field.label}
+                                  unit={field.unit}
+                                  color={currentPerson?.color || '#22c55e'}
+                                  size={44}
+                                />
                               )
                             })}
-                          </>
+                          </div>
+                        ) : hasData ? (
+                          <div className="text-center py-1">
+                            {visibleNutrients.slice(0, 2).map(key => {
+                              const field = NUTRIENT_FIELDS.find(f => f.key === key)
+                              if (!field || !n[key]) return null
+                              const val = key === 'calories' ? `${Math.round(n[key])}` : `${(n[key] || 0).toFixed(0)}`
+                              return <div key={key} className="text-[10px] text-gray-600 truncate">{val} {field.unit}</div>
+                            })}
+                          </div>
                         ) : (
-                          <div className="text-[10px] text-gray-300 pt-1">–</div>
+                          <div className="text-[10px] text-gray-300 text-center pt-2">–</div>
                         )}
                       </div>
                     )
@@ -268,14 +289,48 @@ export default function PlannerPage() {
             <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-semibold text-gray-700">Wochensumme Nährwerte</p>
-                <button
-                  onClick={() => setShowNutrientSettings(true)}
-                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-600 px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
-                >
-                  <Settings size={13} /> Anpassen
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowGoals(true)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-600 px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
+                  >
+                    <Target size={13} /> Ziele
+                  </button>
+                  <button
+                    onClick={() => setShowNutrientSettings(true)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-600 px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
+                  >
+                    <Settings size={13} /> Anpassen
+                  </button>
+                </div>
               </div>
-              <NutrientGrid nutrients={getWeekNutrients()} visibleKeys={visibleNutrients} />
+              {(() => {
+                const weekN = getWeekNutrients()
+                const goals = currentPerson?.nutrient_goals || {}
+                const goalsWithData = visibleNutrients.filter(k => goals[k] > 0)
+                if (goalsWithData.length > 0) {
+                  return (
+                    <div className="flex flex-wrap gap-4 justify-center">
+                      {goalsWithData.map(key => {
+                        const field = NUTRIENT_FIELDS.find(f => f.key === key)
+                        if (!field) return null
+                        return (
+                          <CircleProgress
+                            key={key}
+                            value={weekN[key] || 0}
+                            goal={goals[key] * 7}
+                            label={field.label}
+                            unit={field.unit}
+                            color={currentPerson?.color || '#22c55e'}
+                            size={72}
+                          />
+                        )
+                      })}
+                    </div>
+                  )
+                }
+                return <NutrientGrid nutrients={weekN} visibleKeys={visibleNutrients} />
+              })()}
             </div>
           )}
         </>
@@ -336,6 +391,25 @@ export default function PlannerPage() {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Tagesziele */}
+      <Modal isOpen={showGoals} onClose={() => setShowGoals(false)} title={`Tagesziele – ${currentPerson?.name || ''}`} size="md">
+        {currentPerson && (
+          <GoalsEditor
+            person={currentPerson}
+            onSave={async (goals) => {
+              try {
+                await updateGoals(currentPerson.id, goals)
+                addToast('Ziele gespeichert.', 'success')
+                setShowGoals(false)
+              } catch (e) {
+                addToast(e.message, 'error')
+              }
+            }}
+            onCancel={() => setShowGoals(false)}
+          />
+        )}
       </Modal>
 
       {/* Nährwert-Einstellungen */}
@@ -487,6 +561,90 @@ function PersonManager({ persons, onCreate, onUpdate, onDelete }) {
         title="Person löschen"
         message="Soll diese Person wirklich gelöscht werden? Alle Wochenplan-Einträge dieser Person werden ebenfalls entfernt."
       />
+    </div>
+  )
+}
+
+const GOAL_GROUPS = [
+  { label: 'Grundnährwerte', keys: ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'] },
+  { label: 'Fettsäuren', keys: ['sat_fat', 'omega3', 'omega6'] },
+  { label: 'Mineralstoffe', keys: ['sodium', 'calcium', 'magnesium', 'iron', 'zinc', 'potassium'] },
+  { label: 'Vitamine', keys: ['vit_c', 'vit_d', 'vit_b12', 'vit_a', 'vit_e', 'folate'] },
+]
+
+function GoalsEditor({ person, onSave, onCancel }) {
+  const [goals, setGoals] = useState(() => ({ ...(person.nutrient_goals || {}) }))
+  const [saving, setSaving] = useState(false)
+  const [openGroup, setOpenGroup] = useState('Grundnährwerte')
+
+  async function handleSave() {
+    setSaving(true)
+    const cleaned = {}
+    for (const [k, v] of Object.entries(goals)) {
+      const n = parseFloat(v)
+      if (!isNaN(n) && n > 0) cleaned[k] = n
+    }
+    await onSave(cleaned)
+    setSaving(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-gray-500">
+        Gib Tagesziele ein. Die Kreise im Wochenplaner zeigen dann wie viel davon täglich und wöchentlich erreicht wird. Felder leer lassen = kein Ziel.
+      </p>
+
+      <div className="flex flex-col gap-2">
+        {GOAL_GROUPS.map(group => {
+          const fields = group.keys.map(k => NUTRIENT_FIELDS.find(f => f.key === k)).filter(Boolean)
+          const isOpen = openGroup === group.label
+          const filledCount = fields.filter(f => goals[f.key] > 0).length
+          return (
+            <div key={group.label} className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpenGroup(isOpen ? null : group.label)}
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span className="text-sm font-medium text-gray-700">{group.label}</span>
+                <div className="flex items-center gap-2">
+                  {filledCount > 0 && (
+                    <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">{filledCount} Ziele</span>
+                  )}
+                  <span className="text-gray-400 text-sm">{isOpen ? '▲' : '▼'}</span>
+                </div>
+              </button>
+              {isOpen && (
+                <div className="grid grid-cols-2 gap-3 p-3">
+                  {fields.map(field => (
+                    <div key={field.key} className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-gray-600">
+                        {field.label} <span className="text-gray-400">({field.unit}/Tag)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={goals[field.key] || ''}
+                        placeholder="kein Ziel"
+                        onChange={e => setGoals(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+        <Button variant="secondary" onClick={onCancel}>Abbrechen</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? 'Speichern...' : 'Ziele speichern'}
+        </Button>
+      </div>
     </div>
   )
 }

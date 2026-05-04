@@ -28,11 +28,18 @@ export function usePersons() {
     return data
   }, [])
 
+  const updateGoals = useCallback(async (id, goals) => {
+    const { data, error } = await supabase.from('persons').update({ nutrient_goals: goals }).eq('id', id).select().single()
+    if (error) throw new Error('Ziele konnten nicht gespeichert werden.')
+    setPersons(prev => prev.map(p => p.id === id ? data : p))
+    return data
+  }, [])
+
   const deletePerson = useCallback(async (id) => {
     const { error } = await supabase.from('persons').delete().eq('id', id)
     if (error) throw new Error('Person konnte nicht gelöscht werden.')
     setPersons(prev => prev.filter(p => p.id !== id))
   }, [])
 
-  return { persons, loading, refetch: fetchPersons, createPerson, updatePerson, deletePerson }
+  return { persons, loading, refetch: fetchPersons, createPerson, updatePerson, updateGoals, deletePerson }
 }

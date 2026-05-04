@@ -1,0 +1,1 @@
+ALTER TABLE persons ADD COLUMN IF NOT EXISTS nutrient_goals JSONB DEFAULT '{}';
