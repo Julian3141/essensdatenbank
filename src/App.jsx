@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ToastProvider } from './components/ui/Toast'
 import FoodsPage from './pages/FoodsPage'
 import RecipesPage from './pages/RecipesPage'
 import PlannerPage from './pages/PlannerPage'
 import ShoppingPage from './pages/ShoppingPage'
-import { Apple, BookOpen, Calendar, ShoppingCart, AlertCircle } from 'lucide-react'
+import { Apple, BookOpen, Calendar, ShoppingCart, AlertCircle, Download } from 'lucide-react'
 
 const TABS = [
   { key: 'foods', label: 'Lebensmittel', icon: Apple, description: 'Zutaten & Nährwerte' },
@@ -21,6 +21,23 @@ const hasSupabaseConfig = Boolean(
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('foods')
+  const [installPrompt, setInstallPrompt] = useState(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('appinstalled', () => setInstalled(true))
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  async function handleInstall() {
+    if (!installPrompt) return
+    installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') setInstalled(true)
+    setInstallPrompt(null)
+  }
 
   const ActivePage = {
     foods: FoodsPage,
@@ -41,6 +58,15 @@ export default function App() {
               </div>
               <span className="font-bold text-gray-800 text-lg hidden sm:block">Ernährungsplaner</span>
             </div>
+            {installPrompt && !installed && (
+              <button
+                onClick={handleInstall}
+                className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                <Download size={15} />
+                <span>App installieren</span>
+              </button>
+            )}
           </div>
         </header>
 
