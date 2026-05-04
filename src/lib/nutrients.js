@@ -92,3 +92,35 @@ export const PERSON_COLORS = [
   '#22c55e', '#3b82f6', '#f59e0b', '#ef4444',
   '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
 ]
+
+export const CATEGORICAL_FIELDS = [
+  {
+    key: 'glycemic_index',
+    label: 'Glykäm. Index',
+    options: [
+      { value: 'low', label: 'Niedrig' },
+      { value: 'high', label: 'Hoch' },
+    ],
+    levelColors: { low: 'green', high: 'red' },
+  },
+  {
+    key: 'fodmap',
+    label: 'FODMAP',
+    options: [
+      { value: 'low', label: 'Niedrig' },
+      { value: 'medium', label: 'Mittel' },
+      { value: 'high', label: 'Hoch' },
+    ],
+    levelColors: { low: 'green', medium: 'yellow', high: 'red' },
+  },
+  {
+    key: 'sorbitol',
+    label: 'Sorbitol',
+    options: [
+      { value: 'low', label: 'Niedrig' },
+      { value: 'medium', label: 'Mittel' },
+      { value: 'high', label: 'Hoch' },
+    ],
+    levelColors: { low: 'green', medium: 'yellow', high: 'red' },
+  },
+]

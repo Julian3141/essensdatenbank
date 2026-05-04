@@ -1,16 +1,15 @@
 import { useState, useMemo } from 'react'
 import { useMealPlan } from '../hooks/useMealPlan'
-import { usePersons } from '../hooks/usePersons'
 import { useRecipes } from '../hooks/useRecipes'
 import { useToast } from '../components/ui/Toast'
 import { useNutrientSettings } from '../hooks/useNutrientSettings'
+import { useActivePerson } from '../context/PersonContext'
 import Modal from '../components/ui/Modal'
 import Button from '../components/ui/Button'
-import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
 import CircleProgress from '../components/ui/CircleProgress'
-import { calculateNutrients, sumNutrients, MEAL_TYPES, PERSON_COLORS, NUTRIENT_FIELDS } from '../lib/nutrients'
-import { ChevronLeft, ChevronRight, Plus, X, Users, Edit2, Trash2, Search, Settings, Target } from 'lucide-react'
+import { calculateNutrients, sumNutrients, MEAL_TYPES, NUTRIENT_FIELDS } from '../lib/nutrients'
+import { ChevronLeft, ChevronRight, Plus, X, Search, Settings, Target } from 'lucide-react'
 
 function getWeekStart(date) {
   const d = new Date(date)
@@ -23,6 +22,10 @@ function getWeekStart(date) {
 
 function formatDateShort(date) {
   return date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric' })
+}
+
+function formatDateLong(date) {
+  return date.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 function computeEntryNutrients(entry) {
@@ -43,22 +46,19 @@ function computeEntryNutrients(entry) {
 }
 
 export default function PlannerPage() {
+  const { activePerson, updateGoals } = useActivePerson()
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
-  const { entries, loading, addEntry, removeEntry } = useMealPlan(weekStart)
-  const { persons, createPerson, updatePerson, updateGoals, deletePerson } = usePersons()
+  const { entries, loading, addEntry, removeEntry } = useMealPlan(weekStart, activePerson?.id)
   const { recipes } = useRecipes()
   const { addToast } = useToast()
 
-  const [selectedPersonId, setSelectedPersonId] = useState(null)
   const [addModal, setAddModal] = useState(null)
-  const [managePersons, setManagePersons] = useState(false)
   const [showNutrientSettings, setShowNutrientSettings] = useState(false)
   const [showGoals, setShowGoals] = useState(false)
+  const [dayDetailDate, setDayDetailDate] = useState(null)
   const [recipeSearch, setRecipeSearch] = useState('')
   const [selectedServings, setSelectedServings] = useState(1)
   const { visibleNutrients, toggle: toggleNutrient, reset: resetNutrients } = useNutrientSettings()
-
-  const currentPerson = persons.find(p => p.id === selectedPersonId) || persons[0]
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -68,30 +68,24 @@ export default function PlannerPage() {
     })
   }, [weekStart])
 
-  const personEntries = useMemo(() =>
-    entries.filter(e => e.person_id === currentPerson?.id),
-    [entries, currentPerson]
-  )
-
   function getEntriesFor(date, mealType) {
     const dateStr = date.toISOString().split('T')[0]
-    return personEntries.filter(e => e.date === dateStr && e.meal_type === mealType)
+    return entries.filter(e => e.date === dateStr && e.meal_type === mealType)
   }
 
   function getDayNutrients(date) {
     const dateStr = date.toISOString().split('T')[0]
-    const dayEntries = personEntries.filter(e => e.date === dateStr)
-    return sumNutrients(dayEntries.map(computeEntryNutrients))
+    return sumNutrients(entries.filter(e => e.date === dateStr).map(computeEntryNutrients))
   }
 
   function getWeekNutrients() {
-    return sumNutrients(personEntries.map(computeEntryNutrients))
+    return sumNutrients(entries.map(computeEntryNutrients))
   }
 
   async function handleAddRecipe(recipe) {
     try {
       await addEntry({
-        person_id: currentPerson.id,
+        person_id: activePerson.id,
         recipe_id: recipe.id,
         date: addModal.date,
         meal_type: addModal.mealType,
@@ -119,194 +113,191 @@ export default function PlannerPage() {
     r.name.toLowerCase().includes(recipeSearch.toLowerCase())
   )
 
+  const goals = activePerson?.nutrient_goals || {}
+
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Wochenplaner</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Wochenplan</h1>
           <p className="text-gray-500 text-sm mt-1">
             {weekStart.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })} –{' '}
             {weekDays[6].toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            onClick={() => setShowGoals(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
           >
-            <ChevronLeft size={16} /> Zurück
+            <Target size={15} /> Ziele
           </button>
           <button
-            onClick={() => setWeekStart(getWeekStart(new Date()))}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            onClick={() => setShowNutrientSettings(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
           >
-            Diese Woche
+            <Settings size={15} /> Anzeige
           </button>
-          <button
-            onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
-          >
-            Vor <ChevronRight size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              <ChevronLeft size={16} /> Zurück
+            </button>
+            <button
+              onClick={() => setWeekStart(getWeekStart(new Date()))}
+              className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Heute
+            </button>
+            <button
+              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }}
+              className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Vor <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Personen */}
-      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
-        {persons.map(p => (
-          <button
-            key={p.id}
-            onClick={() => setSelectedPersonId(p.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
-              currentPerson?.id === p.id
-                ? 'shadow-md scale-105'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-            }`}
-            style={currentPerson?.id === p.id ? { backgroundColor: p.color, color: 'white' } : {}}
-          >
-            {p.name}
-          </button>
-        ))}
-        <button
-          onClick={() => setManagePersons(true)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm text-gray-500 border border-dashed border-gray-300 hover:bg-gray-50 whitespace-nowrap"
-        >
-          <Users size={14} />
-          Personen verwalten
-        </button>
-      </div>
-
-      {persons.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
-          <Users size={40} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 mb-4">Noch keine Personen angelegt.</p>
-          <Button onClick={() => setManagePersons(true)} icon={Plus}>Person hinzufügen</Button>
-        </div>
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Lade Wochenplan...</div>
       ) : (
         <>
-          {loading ? (
-            <div className="text-center py-12 text-gray-500">Lade Wochenplan...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <div className="min-w-[700px]">
-                <div className="grid grid-cols-8 gap-1.5 mb-2">
-                  <div className="text-xs text-gray-400 font-medium pt-2 px-1">Mahlzeit</div>
-                  {weekDays.map((day, i) => {
-                    const isToday = day.toDateString() === new Date().toDateString()
-                    return (
-                      <div key={i} className={`text-center py-2 rounded-lg text-xs font-semibold ${isToday ? 'bg-primary-100 text-primary-700' : 'text-gray-500'}`}>
-                        {formatDateShort(day)}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {MEAL_TYPES.map(mealType => (
-                  <div key={mealType.key} className="grid grid-cols-8 gap-1.5 mb-1.5">
-                    <div className="flex flex-col justify-center px-1 py-2">
-                      <span className="text-base">{mealType.icon}</span>
-                      <span className="text-xs text-gray-500 font-medium leading-tight">{mealType.label}</span>
+          <div className="overflow-x-auto">
+            <div className="min-w-[700px]">
+              {/* Day headers */}
+              <div className="grid grid-cols-8 gap-1.5 mb-2">
+                <div className="text-xs text-gray-400 font-medium pt-2 px-1">Mahlzeit</div>
+                {weekDays.map((day, i) => {
+                  const isToday = day.toDateString() === new Date().toDateString()
+                  return (
+                    <div key={i} className={`text-center py-2 rounded-lg text-xs font-semibold ${isToday ? 'bg-primary-100 text-primary-700' : 'text-gray-500'}`}>
+                      {formatDateShort(day)}
                     </div>
-                    {weekDays.map((day, i) => {
-                      const cellEntries = getEntriesFor(day, mealType.key)
-                      const dateStr = day.toISOString().split('T')[0]
-                      return (
-                        <div key={i} className="bg-white border border-gray-200 rounded-lg min-h-[72px] p-1.5 flex flex-col gap-1">
-                          {cellEntries.map(entry => (
-                            <div key={entry.id} className="group relative bg-primary-50 border border-primary-100 rounded p-1.5">
-                              <div className="pr-4 text-xs font-medium text-primary-800 truncate leading-tight">{entry.recipes?.name}</div>
-                              <div className="text-[10px] text-primary-500">{entry.servings}× Portion</div>
-                              <button
-                                onClick={() => handleRemoveEntry(entry.id)}
-                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => setAddModal({ date: dateStr, mealType: mealType.key })}
-                            className="mt-auto text-gray-300 hover:text-primary-400 hover:bg-primary-50 rounded p-1 transition-colors flex items-center justify-center"
-                            title="Rezept hinzufügen"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
+                  )
+                })}
+              </div>
 
-                <div className="grid grid-cols-8 gap-1.5 mt-3 pt-3 border-t border-gray-100">
-                  <div className="text-xs text-gray-400 font-medium py-1 px-1">Tagesges.</div>
+              {/* Meal rows */}
+              {MEAL_TYPES.map(mealType => (
+                <div key={mealType.key} className="grid grid-cols-8 gap-1.5 mb-1.5">
+                  <div className="flex flex-col justify-center px-1 py-2">
+                    <span className="text-base">{mealType.icon}</span>
+                    <span className="text-xs text-gray-500 font-medium leading-tight">{mealType.label}</span>
+                  </div>
                   {weekDays.map((day, i) => {
-                    const n = getDayNutrients(day)
-                    const goals = currentPerson?.nutrient_goals || {}
-                    const hasData = n.calories && n.calories > 0
-                    const goalsWithData = visibleNutrients.filter(k => goals[k] > 0)
-                    const showCircles = goalsWithData.length > 0 && hasData
+                    const cellEntries = getEntriesFor(day, mealType.key)
+                    const dateStr = day.toISOString().split('T')[0]
                     return (
-                      <div key={i} className={`rounded-lg p-1 ${hasData ? 'bg-gray-50' : 'bg-gray-50'}`}>
-                        {showCircles ? (
-                          <div className="flex flex-wrap gap-0.5 justify-center">
-                            {goalsWithData.slice(0, 2).map(key => {
-                              const field = NUTRIENT_FIELDS.find(f => f.key === key)
-                              if (!field) return null
-                              return (
-                                <CircleProgress
-                                  key={key}
-                                  value={n[key] || 0}
-                                  goal={goals[key]}
-                                  label={field.label}
-                                  unit={field.unit}
-                                  color={currentPerson?.color || '#22c55e'}
-                                  size={44}
-                                />
-                              )
-                            })}
+                      <div key={i} className="bg-white border border-gray-200 rounded-lg min-h-[72px] p-1.5 flex flex-col gap-1">
+                        {cellEntries.map(entry => (
+                          <div key={entry.id} className="group relative bg-primary-50 border border-primary-100 rounded p-1.5">
+                            <div className="pr-4 text-xs font-medium text-primary-800 truncate leading-tight">{entry.recipes?.name}</div>
+                            <div className="text-[10px] text-primary-500">{entry.servings}× Portion</div>
+                            <button
+                              onClick={() => handleRemoveEntry(entry.id)}
+                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
-                        ) : hasData ? (
-                          <div className="text-center py-1">
-                            {visibleNutrients.slice(0, 2).map(key => {
-                              const field = NUTRIENT_FIELDS.find(f => f.key === key)
-                              if (!field || !n[key]) return null
-                              const val = key === 'calories' ? `${Math.round(n[key])}` : `${(n[key] || 0).toFixed(0)}`
-                              return <div key={key} className="text-[10px] text-gray-600 truncate">{val} {field.unit}</div>
-                            })}
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-gray-300 text-center pt-2">–</div>
-                        )}
+                        ))}
+                        <button
+                          onClick={() => setAddModal({ date: dateStr, mealType: mealType.key })}
+                          className="mt-auto text-gray-300 hover:text-primary-400 hover:bg-primary-50 rounded p-1 transition-colors flex items-center justify-center"
+                          title="Rezept hinzufügen"
+                        >
+                          <Plus size={14} />
+                        </button>
                       </div>
                     )
                   })}
                 </div>
+              ))}
+
+              {/* Daily summary row */}
+              <div className="grid grid-cols-8 gap-1.5 mt-3 pt-3 border-t border-gray-100">
+                <div className="flex flex-col justify-center text-xs text-gray-400 font-medium py-1 px-1 leading-tight">
+                  Tages&shy;gesamt
+                </div>
+                {weekDays.map((day, i) => {
+                  const n = getDayNutrients(day)
+                  const hasData = n.calories && n.calories > 0
+                  const goalsWithData = visibleNutrients.filter(k => goals[k] > 0)
+                  const showCircles = goalsWithData.length > 0 && hasData
+
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setDayDetailDate(day)}
+                      className="rounded-lg p-1.5 bg-gray-50 hover:bg-primary-50 hover:ring-1 hover:ring-primary-200 transition-all text-left cursor-pointer"
+                      title={`${formatDateLong(day)} – Details anzeigen`}
+                    >
+                      {showCircles ? (
+                        <div className="flex flex-col gap-0.5">
+                          {goalsWithData.slice(0, 3).map(key => {
+                            const field = NUTRIENT_FIELDS.find(f => f.key === key)
+                            if (!field) return null
+                            const val = n[key] || 0
+                            const pct = Math.min(100, Math.round((val / goals[key]) * 100))
+                            const isOver = val > goals[key]
+                            return (
+                              <div key={key} className="flex flex-col gap-0.5">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[9px] text-gray-500 truncate leading-none">{field.label}</span>
+                                  <span className={`text-[9px] font-medium leading-none ${isOver ? 'text-red-500' : 'text-gray-600'}`}>
+                                    {field.unit === 'kcal' ? Math.round(val) : val.toFixed(0)}
+                                  </span>
+                                </div>
+                                <div className="h-1 rounded-full bg-gray-200 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor: isOver ? '#ef4444' : (activePerson?.color || '#22c55e'),
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })}
+                          {goalsWithData.length > 3 && (
+                            <span className="text-[9px] text-gray-400 text-center">+{goalsWithData.length - 3} mehr</span>
+                          )}
+                        </div>
+                      ) : hasData ? (
+                        <div className="flex flex-col gap-0.5">
+                          {visibleNutrients.slice(0, 3).map(key => {
+                            const field = NUTRIENT_FIELDS.find(f => f.key === key)
+                            if (!field || !n[key]) return null
+                            const val = field.unit === 'kcal' ? Math.round(n[key]) : n[key].toFixed(0)
+                            return (
+                              <div key={key} className="flex justify-between items-center gap-1">
+                                <span className="text-[9px] text-gray-400 truncate leading-tight">{field.label}</span>
+                                <span className="text-[9px] font-medium text-gray-600 whitespace-nowrap">{val} {field.unit}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-300 text-center py-1">–</div>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
-          )}
+          </div>
 
-          {personEntries.length > 0 && (
+          {/* Weekly summary */}
+          {entries.length > 0 && (
             <div className="mt-4 bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-gray-700">Wochensumme Nährwerte</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowGoals(true)}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-600 px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
-                  >
-                    <Target size={13} /> Ziele
-                  </button>
-                  <button
-                    onClick={() => setShowNutrientSettings(true)}
-                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-primary-600 px-2 py-1 rounded-lg hover:bg-primary-50 transition-colors"
-                  >
-                    <Settings size={13} /> Anpassen
-                  </button>
-                </div>
-              </div>
+              <p className="text-sm font-semibold text-gray-700 mb-3">Wochensumme Nährwerte</p>
               {(() => {
                 const weekN = getWeekNutrients()
-                const goals = currentPerson?.nutrient_goals || {}
                 const goalsWithData = visibleNutrients.filter(k => goals[k] > 0)
                 if (goalsWithData.length > 0) {
                   return (
@@ -321,7 +312,7 @@ export default function PlannerPage() {
                             goal={goals[key] * 7}
                             label={field.label}
                             unit={field.unit}
-                            color={currentPerson?.color || '#22c55e'}
+                            color={activePerson?.color || '#22c55e'}
                             size={72}
                           />
                         )
@@ -393,14 +384,33 @@ export default function PlannerPage() {
         </div>
       </Modal>
 
+      {/* Tag-Detail */}
+      <Modal
+        isOpen={!!dayDetailDate}
+        onClose={() => setDayDetailDate(null)}
+        title={dayDetailDate ? formatDateLong(dayDetailDate) : ''}
+        size="md"
+      >
+        {dayDetailDate && (
+          <DayDetail
+            nutrients={getDayNutrients(dayDetailDate)}
+            goals={goals}
+            visibleNutrients={visibleNutrients}
+            personColor={activePerson?.color || '#22c55e'}
+            onOpenGoals={() => { setDayDetailDate(null); setShowGoals(true) }}
+            onOpenSettings={() => { setDayDetailDate(null); setShowNutrientSettings(true) }}
+          />
+        )}
+      </Modal>
+
       {/* Tagesziele */}
-      <Modal isOpen={showGoals} onClose={() => setShowGoals(false)} title={`Tagesziele – ${currentPerson?.name || ''}`} size="md">
-        {currentPerson && (
+      <Modal isOpen={showGoals} onClose={() => setShowGoals(false)} title={`Ziele – ${activePerson?.name || ''}`} size="md">
+        {activePerson && (
           <GoalsEditor
-            person={currentPerson}
+            person={activePerson}
             onSave={async (goals) => {
               try {
-                await updateGoals(currentPerson.id, goals)
+                await updateGoals(activePerson.id, goals)
                 addToast('Ziele gespeichert.', 'success')
                 setShowGoals(false)
               } catch (e) {
@@ -413,7 +423,7 @@ export default function PlannerPage() {
       </Modal>
 
       {/* Nährwert-Einstellungen */}
-      <Modal isOpen={showNutrientSettings} onClose={() => setShowNutrientSettings(false)} title="Angezeigte Nährwerte einstellen" size="sm">
+      <Modal isOpen={showNutrientSettings} onClose={() => setShowNutrientSettings(false)} title="Angezeigte Nährwerte" size="sm">
         <div className="flex flex-col gap-3">
           <p className="text-sm text-gray-500">Wähle welche Nährwerte in der Tages- und Wochenübersicht angezeigt werden.</p>
           <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
@@ -436,151 +446,127 @@ export default function PlannerPage() {
           </div>
         </div>
       </Modal>
-
-      {/* Personen verwalten */}
-      <Modal isOpen={managePersons} onClose={() => setManagePersons(false)} title="Personen verwalten" size="sm">
-        <PersonManager
-          persons={persons}
-          onCreate={async (data) => {
-            try { await createPerson(data); addToast('Person angelegt.', 'success') }
-            catch (e) { addToast(e.message, 'error') }
-          }}
-          onUpdate={async (id, data) => {
-            try { await updatePerson(id, data); addToast('Person aktualisiert.', 'success') }
-            catch (e) { addToast(e.message, 'error') }
-          }}
-          onDelete={async (id) => {
-            try { await deletePerson(id); addToast('Person gelöscht.', 'success') }
-            catch (e) { addToast(e.message, 'error') }
-          }}
-        />
-      </Modal>
     </div>
   )
 }
 
-function PersonManager({ persons, onCreate, onUpdate, onDelete }) {
-  const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState(PERSON_COLORS[0])
-  const [editId, setEditId] = useState(null)
-  const [editName, setEditName] = useState('')
-  const [editColor, setEditColor] = useState('')
-  const [deleteId, setDeleteId] = useState(null)
-  const [saving, setSaving] = useState(false)
-
-  async function handleCreate() {
-    if (!newName.trim()) return
-    setSaving(true)
-    await onCreate({ name: newName.trim(), color: newColor })
-    setNewName('')
-    setSaving(false)
-  }
-
-  async function handleUpdate(id) {
-    if (!editName.trim()) return
-    setSaving(true)
-    await onUpdate(id, { name: editName.trim(), color: editColor })
-    setEditId(null)
-    setSaving(false)
-  }
+function DayDetail({ nutrients, goals, visibleNutrients, personColor, onOpenGoals, onOpenSettings }) {
+  const hasData = nutrients.calories && nutrients.calories > 0
+  const displayKeys = visibleNutrients.filter(k => nutrients[k] > 0 || goals[k] > 0)
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        {persons.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-2">Noch keine Personen vorhanden.</p>
-        )}
-        {persons.map(p => (
-          <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
-            {editId === p.id ? (
-              <>
-                <input
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                  autoFocus
-                  onKeyDown={e => e.key === 'Enter' && handleUpdate(p.id)}
-                />
-                <div className="flex gap-1">
-                  {PERSON_COLORS.map(c => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setEditColor(c)}
-                      className={`w-5 h-5 rounded-full border-2 transition-transform ${editColor === c ? 'border-gray-700 scale-110' : 'border-transparent'}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
+      {!hasData ? (
+        <p className="text-center text-gray-400 py-4">Keine Mahlzeiten an diesem Tag.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {displayKeys.map(key => {
+            const field = NUTRIENT_FIELDS.find(f => f.key === key)
+            if (!field) return null
+            const val = nutrients[key] || 0
+            const goal = goals[key] || 0
+            const pct = goal > 0 ? Math.min(100, (val / goal) * 100) : 0
+            const isOver = goal > 0 && val > goal
+            const formatted = field.unit === 'kcal'
+              ? `${Math.round(val)} kcal`
+              : field.unit === 'mg' ? `${val.toFixed(1)} mg`
+              : field.unit === 'µg' ? `${val.toFixed(1)} µg`
+              : `${val.toFixed(1)} g`
+
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-sm text-gray-700">{field.label}</span>
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <span className={`font-medium ${isOver ? 'text-red-600' : 'text-gray-800'}`}>{formatted}</span>
+                    {goal > 0 && (
+                      <span className="text-gray-400 text-xs">
+                        / {field.unit === 'kcal' ? `${Math.round(goal)} kcal` : `${goal % 1 === 0 ? goal : goal.toFixed(1)} ${field.unit}`}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button onClick={() => handleUpdate(p.id)} className="text-xs text-primary-600 font-semibold" disabled={saving}>OK</button>
-                <button onClick={() => setEditId(null)} className="text-xs text-gray-400">✕</button>
-              </>
-            ) : (
-              <>
-                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                <span className="flex-1 text-sm text-gray-700">{p.name}</span>
-                <button onClick={() => { setEditId(p.id); setEditName(p.name); setEditColor(p.color) }}
-                  className="p-1 text-gray-400 hover:text-primary-600 rounded"><Edit2 size={14} /></button>
-                <button onClick={() => setDeleteId(p.id)}
-                  className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 size={14} /></button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="border-t border-gray-100 pt-4">
-        <p className="text-sm font-medium text-gray-700 mb-2">Neue Person hinzufügen</p>
-        <input
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-          placeholder="Name eingeben..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-        <div className="flex gap-1.5 mb-3 flex-wrap">
-          {PERSON_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setNewColor(c)}
-              className={`w-7 h-7 rounded-full border-2 transition-transform ${newColor === c ? 'border-gray-700 scale-110' : 'border-white shadow'}`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
+                {goal > 0 && (
+                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: isOver ? '#ef4444' : personColor,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {displayKeys.length === 0 && (
+            <p className="text-sm text-gray-400 text-center">Keine konfigurierten Nährwerte vorhanden.</p>
+          )}
         </div>
-        <Button onClick={handleCreate} disabled={!newName.trim() || saving} className="w-full justify-center" icon={Plus}>
-          {saving ? 'Wird hinzugefügt...' : 'Person hinzufügen'}
-        </Button>
+      )}
+      <div className="flex gap-2 pt-2 border-t border-gray-100">
+        <button
+          onClick={onOpenGoals}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <Target size={14} /> Ziele anpassen
+        </button>
+        <button
+          onClick={onOpenSettings}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <Settings size={14} /> Anzeige anpassen
+        </button>
       </div>
-
-      <ConfirmDialog
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={() => { onDelete(deleteId); setDeleteId(null) }}
-        title="Person löschen"
-        message="Soll diese Person wirklich gelöscht werden? Alle Wochenplan-Einträge dieser Person werden ebenfalls entfernt."
-      />
     </div>
   )
 }
 
 const GOAL_GROUPS = [
   { label: 'Grundnährwerte', keys: ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'] },
-  { label: 'Fettsäuren', keys: ['sat_fat', 'omega3', 'omega6'] },
-  { label: 'Mineralstoffe', keys: ['sodium', 'calcium', 'magnesium', 'iron', 'zinc', 'potassium'] },
-  { label: 'Vitamine', keys: ['vit_c', 'vit_d', 'vit_b12', 'vit_a', 'vit_e', 'folate'] },
+  { label: 'Fettsäuren',     keys: ['sat_fat', 'omega3', 'omega6'] },
+  { label: 'Mineralstoffe',  keys: ['sodium', 'calcium', 'magnesium', 'iron', 'zinc', 'potassium'] },
+  { label: 'Vitamine',       keys: ['vit_c', 'vit_d', 'vit_b12', 'vit_a', 'vit_e', 'folate'] },
 ]
 
 function GoalsEditor({ person, onSave, onCancel }) {
-  const [goals, setGoals] = useState(() => ({ ...(person.nutrient_goals || {}) }))
+  // Store daily goals as strings for easy editing
+  const [daily, setDaily] = useState(() => {
+    const g = person.nutrient_goals || {}
+    const result = {}
+    for (const f of NUTRIENT_FIELDS) result[f.key] = g[f.key] != null ? String(g[f.key]) : ''
+    return result
+  })
   const [saving, setSaving] = useState(false)
   const [openGroup, setOpenGroup] = useState('Grundnährwerte')
+
+  function setDailyVal(key, val) {
+    setDaily(prev => ({ ...prev, [key]: val }))
+  }
+
+  function setWeeklyVal(key, val) {
+    const n = parseFloat(val)
+    if (!isNaN(n) && n > 0) {
+      setDaily(prev => ({ ...prev, [key]: String(+(n / 7).toFixed(4)) }))
+    } else {
+      setDaily(prev => ({ ...prev, [key]: '' }))
+    }
+  }
+
+  function weeklyDisplay(key) {
+    const n = parseFloat(daily[key])
+    if (!isNaN(n) && n > 0) {
+      const w = n * 7
+      return w % 1 === 0 ? String(w) : w.toFixed(1)
+    }
+    return ''
+  }
 
   async function handleSave() {
     setSaving(true)
     const cleaned = {}
-    for (const [k, v] of Object.entries(goals)) {
+    for (const [k, v] of Object.entries(daily)) {
       const n = parseFloat(v)
       if (!isNaN(n) && n > 0) cleaned[k] = n
     }
@@ -591,14 +577,14 @@ function GoalsEditor({ person, onSave, onCancel }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-gray-500">
-        Gib Tagesziele ein. Die Kreise im Wochenplaner zeigen dann wie viel davon täglich und wöchentlich erreicht wird. Felder leer lassen = kein Ziel.
+        Tagesziel eingeben → Wochenziel wird automatisch berechnet (×7), und umgekehrt.
       </p>
 
       <div className="flex flex-col gap-2">
         {GOAL_GROUPS.map(group => {
           const fields = group.keys.map(k => NUTRIENT_FIELDS.find(f => f.key === k)).filter(Boolean)
           const isOpen = openGroup === group.label
-          const filledCount = fields.filter(f => goals[f.key] > 0).length
+          const filledCount = fields.filter(f => parseFloat(daily[f.key]) > 0).length
           return (
             <div key={group.label} className="border border-gray-200 rounded-lg overflow-hidden">
               <button
@@ -615,23 +601,41 @@ function GoalsEditor({ person, onSave, onCancel }) {
                 </div>
               </button>
               {isOpen && (
-                <div className="grid grid-cols-2 gap-3 p-3">
-                  {fields.map(field => (
-                    <div key={field.key} className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-gray-600">
-                        {field.label} <span className="text-gray-400">({field.unit}/Tag)</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={goals[field.key] || ''}
-                        placeholder="kein Ziel"
-                        onChange={e => setGoals(prev => ({ ...prev, [field.key]: e.target.value }))}
-                        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      />
-                    </div>
-                  ))}
+                <div className="p-3">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 gap-y-2.5 items-center">
+                    <div />
+                    <div className="text-xs font-medium text-gray-500 text-center w-24">Täglich</div>
+                    <div className="text-xs font-medium text-gray-500 text-center w-24">Wöchentlich</div>
+
+                    {fields.map(field => (
+                      <>
+                        <label key={`lbl-${field.key}`} className="text-xs text-gray-600 truncate">
+                          {field.label} <span className="text-gray-400">({field.unit})</span>
+                        </label>
+                        <input
+                          key={`d-${field.key}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={daily[field.key]}
+                          placeholder="–"
+                          onChange={e => setDailyVal(field.key, e.target.value)}
+                          className="w-24 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                        <input
+                          key={`w-${field.key}`}
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={weeklyDisplay(field.key)}
+                          placeholder="–"
+                          onChange={e => setWeeklyVal(field.key, e.target.value)}
+                          className="w-24 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                      </>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

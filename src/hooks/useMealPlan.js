@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-export function useMealPlan(weekStart) {
+export function useMealPlan(weekStart, personId = null) {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -14,7 +14,7 @@ export function useMealPlan(weekStart) {
     const endStr = weekEnd.toISOString().split('T')[0]
     const startStr = weekStart.toISOString().split('T')[0]
 
-    const { data } = await supabase
+    let query = supabase
       .from('meal_plan_entries')
       .select(`
         *,
@@ -30,9 +30,13 @@ export function useMealPlan(weekStart) {
       .lte('date', endStr)
       .order('date')
 
+    if (personId) query = query.eq('person_id', personId)
+
+    const { data } = await query
+
     setEntries(data || [])
     setLoading(false)
-  }, [weekStart])
+  }, [weekStart, personId])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
 

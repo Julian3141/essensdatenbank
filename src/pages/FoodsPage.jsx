@@ -8,7 +8,14 @@ import FoodForm from '../components/foods/FoodForm'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
 import { Input, Select } from '../components/ui/Input'
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
-import { FOOD_CATEGORIES } from '../lib/nutrients'
+import { FOOD_CATEGORIES, CATEGORICAL_FIELDS } from '../lib/nutrients'
+
+const CAT_BADGE_COLORS = {
+  low:    'bg-green-100 text-green-700',
+  medium: 'bg-yellow-100 text-yellow-700',
+  high:   'bg-red-100 text-red-700',
+}
+const CAT_LEVEL_LABELS = { low: 'Niedrig', medium: 'Mittel', high: 'Hoch' }
 
 export default function FoodsPage() {
   const { foods, loading, error, createFood, updateFood, deleteFood } = useFoods()
@@ -116,6 +123,15 @@ export default function FoodsPage() {
                     {food.nutrients?.fat != null ? `· ${food.nutrients.fat}g Fett` : ''}
                     <span className="text-gray-400"> pro 100g</span>
                   </div>
+                  {CATEGORICAL_FIELDS.some(f => food[f.key]) && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {CATEGORICAL_FIELDS.filter(f => food[f.key]).map(f => (
+                        <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CAT_BADGE_COLORS[food[f.key]]}`}>
+                          {f.label}: {CAT_LEVEL_LABELS[food[f.key]]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <button

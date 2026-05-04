@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Input, Select } from '../ui/Input'
 import Button from '../ui/Button'
-import { NUTRIENT_FIELDS, FOOD_CATEGORIES, NUTRIENT_DEFAULTS } from '../../lib/nutrients'
+import { NUTRIENT_FIELDS, FOOD_CATEGORIES, NUTRIENT_DEFAULTS, CATEGORICAL_FIELDS } from '../../lib/nutrients'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
 const NUTRIENT_GROUPS = [
@@ -30,6 +30,11 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
     const base = { ...NUTRIENT_DEFAULTS }
     if (initial?.nutrients) return { ...base, ...initial.nutrients }
     return base
+  })
+  const [categoricalValues, setCategoricalValues] = useState(() => {
+    const vals = {}
+    for (const f of CATEGORICAL_FIELDS) vals[f.key] = initial?.[f.key] || ''
+    return vals
   })
   const [extraFields, setExtraFields] = useState(() => {
     if (!initial?.nutrients) return []
@@ -68,7 +73,11 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
         const num = parseFloat(nutrients[k])
         if (!isNaN(num) && num !== 0) nutrientData[k] = num
       }
-      await onSubmit({ name: name.trim(), category, nutrients: nutrientData })
+      const catData = {}
+      for (const [k, v] of Object.entries(categoricalValues)) {
+        catData[k] = v || null
+      }
+      await onSubmit({ name: name.trim(), category, nutrients: nutrientData, ...catData })
     } finally {
       setSubmitting(false)
     }
@@ -100,6 +109,36 @@ export default function FoodForm({ initial = null, onSubmit, onCancel }) {
       <Select label="Kategorie" value={category} onChange={e => setCategory(e.target.value)}>
         {FOOD_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
       </Select>
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => toggleGroup('Verträglichkeit')}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <span className="text-sm font-medium text-gray-700">Verträglichkeit</span>
+          {expandedGroups.includes('Verträglichkeit')
+            ? <ChevronUp size={15} className="text-gray-400" />
+            : <ChevronDown size={15} className="text-gray-400" />}
+        </button>
+        {expandedGroups.includes('Verträglichkeit') && (
+          <div className="grid grid-cols-2 gap-3 p-3">
+            {CATEGORICAL_FIELDS.map(field => (
+              <Select
+                key={field.key}
+                label={field.label}
+                value={categoricalValues[field.key]}
+                onChange={e => setCategoricalValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+              >
+                <option value="">– nicht angegeben –</option>
+                {field.options.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div>
         <p className="text-sm font-medium text-gray-700 mb-2">Nährwerte pro 100g</p>

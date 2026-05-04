@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useMealPlan } from '../hooks/useMealPlan'
-import { usePersons } from '../hooks/usePersons'
+import { useActivePerson } from '../context/PersonContext'
 import { ShoppingCart, Check, RefreshCw, ChevronDown, ChevronUp, Copy, CheckCheck } from 'lucide-react'
-import Button from '../components/ui/Button'
 import { FOOD_CATEGORIES } from '../lib/nutrients'
 
 function getWeekStart(date) {
@@ -15,12 +14,12 @@ function getWeekStart(date) {
 }
 
 export default function ShoppingPage() {
+  const { activePerson } = useActivePerson()
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
-  const { entries, loading } = useMealPlan(weekStart)
-  const { persons } = usePersons()
+  const { entries, loading } = useMealPlan(weekStart, activePerson?.id)
   const [checkedItems, setCheckedItems] = useState(new Set())
-  const [selectedPersonIds, setSelectedPersonIds] = useState([])
   const [collapsedCategories, setCollapsedCategories] = useState(new Set())
+  const [copied, setCopied] = useState(false)
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
@@ -30,17 +29,9 @@ export default function ShoppingPage() {
     })
   }, [weekStart])
 
-  const activePersonIds = useMemo(() => {
-    if (selectedPersonIds.length === 0) return persons.map(p => p.id)
-    return selectedPersonIds
-  }, [selectedPersonIds, persons])
-
   const shoppingList = useMemo(() => {
     const aggregated = {}
-
-    const filteredEntries = entries.filter(e => activePersonIds.includes(e.person_id))
-
-    filteredEntries.forEach(entry => {
+    entries.forEach(entry => {
       const recipe = entry.recipes
       if (!recipe?.recipe_ingredients) return
       const entryServings = parseFloat(entry.servings) || 1
@@ -67,9 +58,8 @@ export default function ShoppingPage() {
         }
       })
     })
-
     return Object.values(aggregated).sort((a, b) => a.foodName.localeCompare(b.foodName))
-  }, [entries, activePersonIds])
+  }, [entries])
 
   const grouped = useMemo(() => {
     const groups = {}
@@ -103,15 +93,14 @@ export default function ShoppingPage() {
     })
   }
 
-  function togglePerson(id) {
-    setSelectedPersonIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
+  function resetWeek(offset) {
+    const d = new Date(weekStart)
+    d.setDate(d.getDate() + offset)
+    setWeekStart(d)
     setCheckedItems(new Set())
   }
 
   const uncheckedCount = shoppingList.filter(i => !checkedItems.has(i.foodId)).length
-  const [copied, setCopied] = useState(false)
 
   function copyToClipboard() {
     const weekLabel = `Einkaufsliste ${weekStart.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })} – ${weekDays[6].toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}`
@@ -134,7 +123,6 @@ export default function ShoppingPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Header – mobil-freundlich: Titel oben, Buttons darunter */}
       <div className="mb-5">
         <div className="flex items-center justify-between mb-2">
           <div>
@@ -161,54 +149,19 @@ export default function ShoppingPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); setCheckedItems(new Set()) }}
+            onClick={() => resetWeek(-7)}
             className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 text-center"
           >← Zurück</button>
           <button
-            onClick={() => setWeekStart(getWeekStart(new Date()))}
+            onClick={() => { setWeekStart(getWeekStart(new Date())); setCheckedItems(new Set()) }}
             className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 text-center"
           >Diese Woche</button>
           <button
-            onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); setCheckedItems(new Set()) }}
+            onClick={() => resetWeek(7)}
             className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 text-center"
           >Vor →</button>
         </div>
       </div>
-
-      {/* Personen-Filter */}
-      {persons.length > 1 && (
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="text-xs text-gray-500">Für:</span>
-          {persons.map(p => (
-            <button
-              key={p.id}
-              onClick={() => togglePerson(p.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                activePersonIds.includes(p.id) && selectedPersonIds.length > 0
-                  ? 'text-white shadow-sm'
-                  : selectedPersonIds.length === 0
-                  ? 'text-white opacity-80'
-                  : 'bg-white border border-gray-200 text-gray-500'
-              }`}
-              style={
-                (activePersonIds.includes(p.id) && selectedPersonIds.length > 0) || selectedPersonIds.length === 0
-                  ? { backgroundColor: p.color }
-                  : {}
-              }
-            >
-              {p.name}
-            </button>
-          ))}
-          {selectedPersonIds.length > 0 && (
-            <button
-              onClick={() => setSelectedPersonIds([])}
-              className="px-3 py-1 rounded-full text-xs text-gray-400 border border-gray-200 hover:bg-gray-50"
-            >
-              Alle zeigen
-            </button>
-          )}
-        </div>
-      )}
 
       {loading ? (
         <div className="text-center py-12 text-gray-500">Lade Einkaufsliste...</div>
