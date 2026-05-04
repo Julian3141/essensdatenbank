@@ -72,16 +72,16 @@ export default function OpenFoodFactsSearch({ onSelect }) {
     setSearched(true)
     try {
       const url =
-        `https://world.openfoodfacts.org/cgi/search.pl` +
+        `https://world.openfoodfacts.org/api/v2/search` +
         `?search_terms=${encodeURIComponent(q)}` +
-        `&search_simple=1&action=process&json=1` +
         `&fields=product_name,brands,nutriments,categories_tags` +
         `&page_size=15`
-      const res = await fetch(url, { headers: { 'User-Agent': 'Ernaehrungsplaner/1.0' } })
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setResults((data.products || []).filter(p => p.product_name?.trim()))
-    } catch {
-      setError('Suche fehlgeschlagen. Bitte Internetverbindung prüfen.')
+    } catch (e) {
+      setError(`Suche fehlgeschlagen: ${e.message}`)
     } finally {
       setLoading(false)
     }
