@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { Apple, ArrowLeft, Settings, Plus, Edit2, Trash2, Eye, EyeOff, Download, CheckCircle } from 'lucide-react'
+import { Apple, ArrowLeft, Settings, Plus, Edit2, Trash2, Eye, EyeOff } from 'lucide-react'
 import Button from './Button'
 import ConfirmDialog from './ConfirmDialog'
 import { PERSON_COLORS } from '../../lib/nutrients'
-import { BUILTIN_FOODS } from '../../lib/builtinFoods'
-import { supabase } from '../../lib/supabase'
 
-const ADMIN_PIN = '7537'
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || ''
 
 export default function PersonSelect({ persons, onLogin, onCreate, onUpdate, onDelete }) {
   const [step, setStep] = useState('select') // 'select' | 'pin' | 'admin-pin' | 'admin'
@@ -198,33 +196,6 @@ export default function PersonSelect({ persons, onLogin, onCreate, onUpdate, onD
 }
 
 function AdminScreen({ persons, onBack, onCreate, onUpdate, onDelete }) {
-  const [importState, setImportState] = useState('idle') // 'idle' | 'running' | 'done' | 'error'
-  const [importResult, setImportResult] = useState(null)
-
-  async function handleImportFoods() {
-    setImportState('running')
-    setImportResult(null)
-    try {
-      const { data: existing } = await supabase.from('foods').select('name')
-      const existingNames = new Set((existing || []).map(f => f.name.toLowerCase()))
-      const toInsert = BUILTIN_FOODS
-        .filter(f => !existingNames.has(f.name.toLowerCase()))
-        .map(({ name, category, nutrients }) => ({ name, category, nutrients }))
-      if (toInsert.length === 0) {
-        setImportResult({ inserted: 0, skipped: BUILTIN_FOODS.length })
-        setImportState('done')
-        return
-      }
-      const { error } = await supabase.from('foods').insert(toInsert)
-      if (error) throw error
-      setImportResult({ inserted: toInsert.length, skipped: BUILTIN_FOODS.length - toInsert.length })
-      setImportState('done')
-    } catch (e) {
-      setImportResult({ error: e.message })
-      setImportState('error')
-    }
-  }
-
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState(PERSON_COLORS[0])
   const [newPin, setNewPin] = useState('')
@@ -329,33 +300,6 @@ function AdminScreen({ persons, onBack, onCreate, onUpdate, onDelete }) {
               )}
             </div>
           ))}
-        </div>
-
-        {/* Lebensmittel-Import */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
-          <p className="text-sm font-medium text-gray-700">Lebensmitteldatenbank importieren</p>
-          <p className="text-xs text-gray-400">
-            Fügt {BUILTIN_FOODS.length} generische Lebensmittel (Getreide, Gemüse, Obst, Fleisch, Tofu, asiatische Zutaten, …) direkt in die Datenbank ein. Bereits vorhandene werden übersprungen.
-          </p>
-          {importState === 'done' && importResult && !importResult.error && (
-            <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              <CheckCircle size={15} />
-              {importResult.inserted > 0
-                ? `${importResult.inserted} Lebensmittel importiert${importResult.skipped > 0 ? `, ${importResult.skipped} bereits vorhanden` : ''}.`
-                : `Alle ${importResult.skipped} Lebensmittel bereits vorhanden.`}
-            </div>
-          )}
-          {importState === 'error' && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{importResult?.error}</p>
-          )}
-          <Button
-            onClick={handleImportFoods}
-            disabled={importState === 'running' || importState === 'done'}
-            icon={importState === 'done' ? CheckCircle : Download}
-            variant={importState === 'done' ? 'secondary' : 'primary'}
-          >
-            {importState === 'running' ? 'Importiere…' : importState === 'done' ? 'Importiert' : 'Lebensmittel importieren'}
-          </Button>
         </div>
 
         {/* New person form */}

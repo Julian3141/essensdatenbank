@@ -8,8 +8,10 @@ import Button from '../components/ui/Button'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
 import RecipeForm from '../components/recipes/RecipeForm'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
-import { calculateNutrients, sumNutrients } from '../lib/nutrients'
-import { Plus, Search, Edit2, Trash2, X, BookOpen, Star } from 'lucide-react'
+import { calculateNutrients, sumNutrients, NUTRIENT_FIELDS, NUTRIENT_FIELDS_CORE } from '../lib/nutrients'
+import { Plus, Search, Edit2, Trash2, X, BookOpen, Star, SlidersHorizontal } from 'lucide-react'
+
+const NUTRIENT_STORAGE_KEY = 'recipe_visible_nutrients'
 
 
 function computeRecipeNutrients(recipe) {
@@ -30,6 +32,24 @@ export default function RecipesPage() {
   const { foods } = useFoods()
   const { addToast } = useToast()
   const { activePerson } = useActivePerson()
+
+  const [visibleNutrients, setVisibleNutrients] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(NUTRIENT_STORAGE_KEY)) || NUTRIENT_FIELDS_CORE } catch { return NUTRIENT_FIELDS_CORE }
+  })
+  const [showNutrientPicker, setShowNutrientPicker] = useState(false)
+
+  function toggleNutrient(key) {
+    setVisibleNutrients(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      localStorage.setItem(NUTRIENT_STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
+  function resetNutrients() {
+    setVisibleNutrients(NUTRIENT_FIELDS_CORE)
+    localStorage.setItem(NUTRIENT_STORAGE_KEY, JSON.stringify(NUTRIENT_FIELDS_CORE))
+  }
 
   const [showCreate, setShowCreate] = useState(false)
   const [editRecipe, setEditRecipe] = useState(null)
@@ -141,7 +161,16 @@ export default function RecipesPage() {
               : `${recipes.length} Rezepte`}
           </p>
         </div>
-        <Button icon={Plus} onClick={() => setShowCreate(true)}>Neues Rezept</Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNutrientPicker(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
+            title="Angezeigte Nährwerte einstellen"
+          >
+            <SlidersHorizontal size={15} /> Nährstoffe
+          </button>
+          <Button icon={Plus} onClick={() => setShowCreate(true)}>Neues Rezept</Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2 mb-4">
@@ -313,7 +342,7 @@ export default function RecipesPage() {
                   {Object.keys(nutrients).length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <p className="text-xs text-gray-400 mb-1.5">pro Portion</p>
-                      <NutrientGrid nutrients={nutrients} compact />
+                      <NutrientGrid nutrients={nutrients} compact visibleKeys={visibleNutrients} />
                     </div>
                   )}
                 </div>
@@ -322,6 +351,33 @@ export default function RecipesPage() {
           })}
         </div>
       )}
+
+      <Modal isOpen={showNutrientPicker} onClose={() => setShowNutrientPicker(false)} title="Angezeigte Nährwerte" size="sm">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-2">
+            {NUTRIENT_FIELDS.map(f => (
+              <label key={f.key} className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleNutrients.includes(f.key)}
+                  onChange={() => toggleNutrient(f.key)}
+                  className="rounded accent-primary-600"
+                />
+                <span className="text-sm text-gray-700">{f.label}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <button
+              onClick={resetNutrients}
+              className="text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Standardauswahl
+            </button>
+            <Button onClick={() => setShowNutrientPicker(false)}>Fertig</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="Neues Rezept anlegen" size="xl">
         <RecipeForm foods={foods} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />

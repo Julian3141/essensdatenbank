@@ -1,19 +1,45 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Search } from 'lucide-react'
-import { BUILTIN_FOODS } from '../../lib/builtinFoods'
+import { supabase } from '../../lib/supabase'
 import { FOOD_CATEGORIES } from '../../lib/nutrients'
 
 export default function BuiltinFoodSearch({ onSelect }) {
   const [query, setQuery] = useState('')
   const [filterCat, setFilterCat] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return BUILTIN_FOODS.filter(f => {
-      const matchName = !q || f.name.toLowerCase().includes(q)
-      const matchCat = !filterCat || f.category === filterCat
-      return matchName && matchCat
-    })
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      const term = query.trim()
+
+      if (term) {
+        // Zwei Abfragen: erst Treffer die mit dem Begriff anfangen, dann Rest
+        const base = (pattern) => {
+          let q = supabase.from('foods').select('*').ilike('name', pattern).order('name').limit(50)
+          if (filterCat) q = q.eq('category', filterCat)
+          return q
+        }
+        const [{ data: starts }, { data: contains }] = await Promise.all([
+          base(`${term}%`),
+          base(`%${term}%`),
+        ])
+        const startIds = new Set((starts || []).map(f => f.id))
+        const merged = [
+          ...(starts || []),
+          ...(contains || []).filter(f => !startIds.has(f.id)),
+        ].slice(0, 50)
+        setResults(merged)
+      } else {
+        let q = supabase.from('foods').select('*').order('name').limit(50)
+        if (filterCat) q = q.eq('category', filterCat)
+        const { data } = await q
+        setResults(data || [])
+      }
+      setLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
   }, [query, filterCat])
 
   return (
@@ -40,14 +66,19 @@ export default function BuiltinFoodSearch({ onSelect }) {
       </div>
 
       <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
-        {results.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-6">Kein Lebensmittel gefunden.</p>
+        {loading && (
+          <p className="text-sm text-gray-400 text-center py-6">Suche…</p>
         )}
-        {results.map((food, i) => {
+        {!loading && results.length === 0 && (
+          <p className="text-sm text-gray-500 text-center py-6">
+            {query || filterCat ? 'Kein Lebensmittel gefunden.' : 'Suchbegriff eingeben…'}
+          </p>
+        )}
+        {results.map((food) => {
           const n = food.nutrients
           return (
             <button
-              key={i}
+              key={food.id}
               onClick={() => onSelect(food)}
               className="flex items-start gap-3 p-3 rounded-lg hover:bg-primary-50 text-left transition-colors border border-transparent hover:border-primary-100"
             >
@@ -68,7 +99,7 @@ export default function BuiltinFoodSearch({ onSelect }) {
       </div>
 
       <p className="text-xs text-gray-400 text-center pt-1 border-t border-gray-100">
-        {BUILTIN_FOODS.length} Lebensmittel · Werte pro 100g · Quelle: BLS / USDA
+        Top 50 Treffer · Werte pro 100g
       </p>
     </div>
   )

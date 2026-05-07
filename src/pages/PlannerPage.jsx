@@ -9,7 +9,7 @@ import Button from '../components/ui/Button'
 import { NutrientGrid } from '../components/ui/NutrientBadge'
 import CircleProgress from '../components/ui/CircleProgress'
 import { calculateNutrients, sumNutrients, MEAL_TYPES, NUTRIENT_FIELDS } from '../lib/nutrients'
-import { ChevronLeft, ChevronRight, Plus, X, Search, Settings, Target } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Search, Settings, Target, User } from 'lucide-react'
 
 function getWeekStart(date) {
   const d = new Date(date)
@@ -28,7 +28,7 @@ function formatDateLong(date) {
   return date.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
-function computeEntryNutrients(entry) {
+function computeEntryNutrients(entry, singlePortion = false) {
   const recipe = entry.recipes
   if (!recipe?.recipe_ingredients?.length) return {}
   const parts = recipe.recipe_ingredients.map(i => {
@@ -37,7 +37,7 @@ function computeEntryNutrients(entry) {
   })
   const total = sumNutrients(parts)
   const recipeServings = recipe.servings || 1
-  const entryServings = parseFloat(entry.servings) || 1
+  const entryServings = singlePortion ? 1 : (parseFloat(entry.servings) || 1)
   const result = {}
   for (const [k, v] of Object.entries(total)) {
     result[k] = (v / recipeServings) * entryServings
@@ -52,6 +52,7 @@ export default function PlannerPage() {
   const { recipes } = useRecipes()
   const { addToast } = useToast()
 
+  const [singlePortion, setSinglePortion] = useState(false)
   const [addModal, setAddModal] = useState(null)
   const [showNutrientSettings, setShowNutrientSettings] = useState(false)
   const [showGoals, setShowGoals] = useState(false)
@@ -75,11 +76,11 @@ export default function PlannerPage() {
 
   function getDayNutrients(date) {
     const dateStr = date.toISOString().split('T')[0]
-    return sumNutrients(entries.filter(e => e.date === dateStr).map(computeEntryNutrients))
+    return sumNutrients(entries.filter(e => e.date === dateStr).map(e => computeEntryNutrients(e, singlePortion)))
   }
 
   function getWeekNutrients() {
-    return sumNutrients(entries.map(computeEntryNutrients))
+    return sumNutrients(entries.map(e => computeEntryNutrients(e, singlePortion)))
   }
 
   async function handleAddRecipe(recipe) {
@@ -127,6 +128,17 @@ export default function PlannerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setSinglePortion(p => !p)}
+            title="Nährwerte immer für 1 Portion berechnen (Einkaufsliste bleibt unverändert)"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors ${
+              singlePortion
+                ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700'
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <User size={15} /> 1 Portion
+          </button>
           <button
             onClick={() => setShowGoals(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"

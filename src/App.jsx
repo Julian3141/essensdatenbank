@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ToastProvider } from './components/ui/Toast'
 import { PersonContext } from './context/PersonContext'
+import { FoodsProvider } from './context/FoodsContext'
 import { usePersons } from './hooks/usePersons'
 import FoodsPage from './pages/FoodsPage'
 import RecipesPage from './pages/RecipesPage'
@@ -112,6 +113,7 @@ export default function App() {
 
   return (
     <PersonContext.Provider value={contextValue}>
+      <FoodsProvider>
       <ToastProvider>
         <div className="min-h-screen bg-gray-50 flex flex-col">
           {/* Header */}
@@ -204,6 +206,7 @@ export default function App() {
           </footer>
         </div>
       </ToastProvider>
+      </FoodsProvider>
     </PersonContext.Provider>
   )
 }

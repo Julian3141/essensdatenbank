@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useFoods } from '../hooks/useFoods'
 import { useToast } from '../components/ui/Toast'
 import Modal from '../components/ui/Modal'
@@ -34,6 +35,16 @@ export default function FoodsPage() {
     return matchName && matchCat
   })
 
+  // Virtual list setup
+  const scrollRef = useRef(null)
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: useCallback((i) => expandedId === filtered[i]?.id ? 260 : 80, [expandedId, filtered]),
+    overscan: 8,
+    measureElement: (el) => el?.getBoundingClientRect().height ?? 80,
+  })
+
   async function handleCreate(data) {
     try {
       await createFood(data)
@@ -64,8 +75,8 @@ export default function FoodsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-4xl mx-auto flex flex-col" style={{ height: 'calc(100vh - 180px)' }}>
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Lebensmittel</h1>
           <p className="text-gray-500 text-sm mt-1">{foods.length} Lebensmittel in der Datenbank</p>
@@ -101,64 +112,76 @@ export default function FoodsPage() {
         <div className="text-center py-12 text-gray-500">Lade Lebensmittel...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
-          {search || filterCat ? 'Keine Lebensmittel gefunden.' : 'Noch keine Lebensmittel angelegt. Klick auf "Neues Lebensmittel" um zu starten.'}
+          {search || filterCat ? 'Keine Lebensmittel gefunden.' : 'Noch keine Lebensmittel angelegt.'}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map(food => (
-            <div key={food.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div
-                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50"
-                onClick={() => setExpandedId(expandedId === food.id ? null : food.id)}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-800">{food.name}</span>
-                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{food.category}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {food.nutrients?.calories != null ? `${Math.round(food.nutrients.calories)} kcal` : ''}{' '}
-                    {food.nutrients?.protein != null ? `· ${food.nutrients.protein}g Eiweiß` : ''}{' '}
-                    {food.nutrients?.carbs != null ? `· ${food.nutrients.carbs}g KH` : ''}{' '}
-                    {food.nutrients?.fat != null ? `· ${food.nutrients.fat}g Fett` : ''}
-                    <span className="text-gray-400"> pro 100g</span>
-                  </div>
-                  {CATEGORICAL_FIELDS.some(f => food[f.key]) && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {CATEGORICAL_FIELDS.filter(f => food[f.key]).map(f => (
-                        <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CAT_BADGE_COLORS[food[f.key]]}`}>
-                          {f.label}: {CAT_LEVEL_LABELS[food[f.key]]}
-                        </span>
-                      ))}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {virtualizer.getVirtualItems().map(vItem => {
+              const food = filtered[vItem.index]
+              const isExpanded = expandedId === food.id
+              return (
+                <div
+                  key={food.id}
+                  data-index={vItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${vItem.start}px)` }}
+                  className="pb-2"
+                >
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div
+                      className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50"
+                      onClick={() => setExpandedId(isExpanded ? null : food.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800">{food.name}</span>
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{food.category}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {food.nutrients?.calories != null ? `${Math.round(food.nutrients.calories)} kcal` : ''}{' '}
+                          {food.nutrients?.protein != null ? `· ${food.nutrients.protein}g Eiweiß` : ''}{' '}
+                          {food.nutrients?.carbs != null ? `· ${food.nutrients.carbs}g KH` : ''}{' '}
+                          {food.nutrients?.fat != null ? `· ${food.nutrients.fat}g Fett` : ''}
+                          <span className="text-gray-400"> pro 100g</span>
+                        </div>
+                        {CATEGORICAL_FIELDS.some(f => food[f.key]) && (
+                          <div className="flex gap-1 mt-1 flex-wrap">
+                            {CATEGORICAL_FIELDS.filter(f => food[f.key]).map(f => (
+                              <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CAT_BADGE_COLORS[food[f.key]]}`}>
+                                {f.label}: {CAT_LEVEL_LABELS[food[f.key]]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={e => { e.stopPropagation(); setEditFood(food) }}
+                          className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeleteId(food.id) }}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                      </div>
                     </div>
-                  )}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+                        <p className="text-xs text-gray-500 mb-2">Nährwerte pro 100g</p>
+                        <NutrientGrid nutrients={food.nutrients} compact />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={e => { e.stopPropagation(); setEditFood(food) }}
-                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                    title="Bearbeiten"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteId(food.id) }}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Löschen"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  {expandedId === food.id ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-                </div>
-              </div>
-              {expandedId === food.id && (
-                <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-                  <p className="text-xs text-gray-500 mb-2">Nährwerte pro 100g</p>
-                  <NutrientGrid nutrients={food.nutrients} compact />
-                </div>
-              )}
-            </div>
-          ))}
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -167,9 +190,7 @@ export default function FoodsPage() {
       </Modal>
 
       <Modal isOpen={!!editFood} onClose={() => setEditFood(null)} title="Lebensmittel bearbeiten" size="lg">
-        {editFood && (
-          <FoodForm initial={editFood} onSubmit={handleUpdate} onCancel={() => setEditFood(null)} />
-        )}
+        {editFood && <FoodForm initial={editFood} onSubmit={handleUpdate} onCancel={() => setEditFood(null)} />}
       </Modal>
 
       <ConfirmDialog

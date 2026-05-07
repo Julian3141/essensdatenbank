@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Apple } from 'lucide-react'
 
-const CORRECT_PIN = '7537'
+const CORRECT_PIN = import.meta.env.VITE_APP_PIN || ''
 const STORAGE_KEY = 'app_unlocked'
 
 export function isUnlocked() {
