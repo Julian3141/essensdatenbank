@@ -52,7 +52,9 @@ export default function PlannerPage() {
   const { recipes } = useRecipes()
   const { addToast } = useToast()
 
-  const [singlePortion, setSinglePortion] = useState(false)
+  const [singlePortion, setSinglePortion] = useState(() =>
+    localStorage.getItem('planner_single_portion') === '1'
+  )
   const [addModal, setAddModal] = useState(null)
   const [showNutrientSettings, setShowNutrientSettings] = useState(false)
   const [showGoals, setShowGoals] = useState(false)
@@ -129,7 +131,11 @@ export default function PlannerPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setSinglePortion(p => !p)}
+            onClick={() => setSinglePortion(p => {
+                const next = !p
+                localStorage.setItem('planner_single_portion', next ? '1' : '0')
+                return next
+              })}
             title="Nährwerte immer für 1 Portion berechnen (Einkaufsliste bleibt unverändert)"
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors ${
               singlePortion
