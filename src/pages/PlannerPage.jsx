@@ -232,11 +232,12 @@ export default function PlannerPage() {
                         {cellEntries.map(entry => {
                           const isDisabled = disabledEntries.has(entry.id)
                           return (
-                            <div
+                            <button
                               key={entry.id}
+                              type="button"
                               onClick={() => toggleDisabled(entry.id)}
                               title={isDisabled ? 'Ausgeklammert – klicken um wieder einzuschließen' : 'Klicken um aus Nährwerten auszuklammern'}
-                              className={`group relative border rounded p-1.5 cursor-pointer transition-all select-none ${
+                              className={`group relative border rounded p-1.5 w-full text-left transition-all ${
                                 isDisabled
                                   ? 'bg-gray-100 border-gray-200 opacity-50'
                                   : 'bg-primary-50 border-primary-100 hover:border-primary-300'
@@ -249,12 +250,13 @@ export default function PlannerPage() {
                                 {entry.servings}× Portion
                               </div>
                               <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); handleRemoveEntry(entry.id) }}
                                 className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
                               >
                                 <X size={12} />
                               </button>
-                            </div>
+                            </button>
                           )
                         })}
                         <button
