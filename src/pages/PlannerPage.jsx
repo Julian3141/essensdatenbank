@@ -100,6 +100,7 @@ export default function PlannerPage() {
       entries
         .filter(e => !disabledEntries.has(e.id))
         .map(e => computeEntryNutrients(e, singlePortion))
+    )
   }
 
   async function handleAddRecipe(recipe) {
