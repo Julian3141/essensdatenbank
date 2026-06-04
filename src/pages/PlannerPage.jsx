@@ -52,9 +52,19 @@ export default function PlannerPage() {
   const { recipes } = useRecipes()
   const { addToast } = useToast()
 
+  const [disabledEntries, setDisabledEntries] = useState(new Set())
   const [singlePortion, setSinglePortion] = useState(() =>
     localStorage.getItem('planner_single_portion') === '1'
   )
+
+  function toggleDisabled(id) {
+    setDisabledEntries(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const [addModal, setAddModal] = useState(null)
   const [showNutrientSettings, setShowNutrientSettings] = useState(false)
   const [showGoals, setShowGoals] = useState(false)
@@ -78,11 +88,18 @@ export default function PlannerPage() {
 
   function getDayNutrients(date) {
     const dateStr = date.toISOString().split('T')[0]
-    return sumNutrients(entries.filter(e => e.date === dateStr).map(e => computeEntryNutrients(e, singlePortion)))
+    return sumNutrients(
+      entries
+        .filter(e => e.date === dateStr && !disabledEntries.has(e.id))
+        .map(e => computeEntryNutrients(e, singlePortion))
+    )
   }
 
   function getWeekNutrients() {
-    return sumNutrients(entries.map(e => computeEntryNutrients(e, singlePortion)))
+    return sumNutrients(
+      entries
+        .filter(e => !disabledEntries.has(e.id))
+        .map(e => computeEntryNutrients(e, singlePortion))
   }
 
   async function handleAddRecipe(recipe) {
@@ -159,19 +176,19 @@ export default function PlannerPage() {
           </button>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }}
+              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); setDisabledEntries(new Set()) }}
               className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
             >
               <ChevronLeft size={16} /> Zurück
             </button>
             <button
-              onClick={() => setWeekStart(getWeekStart(new Date()))}
+              onClick={() => { setWeekStart(getWeekStart(new Date())); setDisabledEntries(new Set()) }}
               className="px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
             >
               Heute
             </button>
             <button
-              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }}
+              onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); setDisabledEntries(new Set()) }}
               className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50"
             >
               Vor <ChevronRight size={16} />
@@ -211,18 +228,34 @@ export default function PlannerPage() {
                     const dateStr = day.toISOString().split('T')[0]
                     return (
                       <div key={i} className="bg-white border border-gray-200 rounded-lg min-h-[72px] p-1.5 flex flex-col gap-1">
-                        {cellEntries.map(entry => (
-                          <div key={entry.id} className="group relative bg-primary-50 border border-primary-100 rounded p-1.5">
-                            <div className="pr-4 text-xs font-medium text-primary-800 truncate leading-tight">{entry.recipes?.name}</div>
-                            <div className="text-[10px] text-primary-500">{entry.servings}× Portion</div>
-                            <button
-                              onClick={() => handleRemoveEntry(entry.id)}
-                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                        {cellEntries.map(entry => {
+                          const isDisabled = disabledEntries.has(entry.id)
+                          return (
+                            <div
+                              key={entry.id}
+                              onClick={() => toggleDisabled(entry.id)}
+                              title={isDisabled ? 'Ausgeklammert – klicken um wieder einzuschließen' : 'Klicken um aus Nährwerten auszuklammern'}
+                              className={`group relative border rounded p-1.5 cursor-pointer transition-all select-none ${
+                                isDisabled
+                                  ? 'bg-gray-100 border-gray-200 opacity-50'
+                                  : 'bg-primary-50 border-primary-100 hover:border-primary-300'
+                              }`}
                             >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
+                              <div className={`pr-4 text-xs font-medium truncate leading-tight ${isDisabled ? 'text-gray-400 line-through' : 'text-primary-800'}`}>
+                                {entry.recipes?.name}
+                              </div>
+                              <div className={`text-[10px] ${isDisabled ? 'text-gray-400' : 'text-primary-500'}`}>
+                                {entry.servings}× Portion
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveEntry(entry.id) }}
+                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          )
+                        })}
                         <button
                           onClick={() => setAddModal({ date: dateStr, mealType: mealType.key })}
                           className="mt-auto text-gray-300 hover:text-primary-400 hover:bg-primary-50 rounded p-1 transition-colors flex items-center justify-center"

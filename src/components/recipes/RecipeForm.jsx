@@ -27,13 +27,24 @@ export default function RecipeForm({ initial = null, foods, onSubmit, onCancel }
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
-  const filteredFoods = useMemo(() =>
-    foods.filter(f =>
-      f.name.toLowerCase().includes(foodSearch.toLowerCase()) &&
-      !ingredients.some(i => i.food_id === f.id)
-    ).slice(0, 8),
-    [foods, foodSearch, ingredients]
-  )
+  const filteredFoods = useMemo(() => {
+    const search = foodSearch.toLowerCase()
+    return foods
+      .filter(f =>
+        f.name.toLowerCase().includes(search) &&
+        !ingredients.some(i => i.food_id === f.id)
+      )
+      .sort((a, b) => {
+        const aName = a.name.toLowerCase()
+        const bName = b.name.toLowerCase()
+        const aStarts = aName.startsWith(search)
+        const bStarts = bName.startsWith(search)
+        if (aStarts && !bStarts) return -1
+        if (!aStarts && bStarts) return 1
+        return aName.localeCompare(bName, 'de')
+      })
+      .slice(0, 20)
+  }, [foods, foodSearch, ingredients])
 
   const totalNutrients = useMemo(() => {
     const parts = ingredients.map(i => {
